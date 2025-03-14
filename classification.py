@@ -7,11 +7,23 @@ import tensorflow as tf
 from tensorflow.keras import layers, models
 from sklearn.model_selection import train_test_split
 
-# 1. 스펙트로그램 저장 함수
-def save_spectrogram(audio_path, save_path):
-    y, sr = librosa.load(audio_path, sr=22050)
+# 1. 오디오 파일을 10초 단위로 자르는 함수
+def trim_audio(audio_path, sr=22050, duration=10):
+    y, _ = librosa.load(audio_path, sr=sr)
+    segment_length = sr * duration  # 10초 길이 샘플 수
+    segments = []
+    
+    for start in range(0, len(y), segment_length):
+        segment = y[start:start + segment_length]
+        if len(segment) == segment_length:
+            segments.append(segment)
+    
+    return segments, sr
+
+# 2. 스펙트로그램 저장 함수
+def save_spectrogram(audio_segment, sr, save_path):
     plt.figure(figsize=(4, 4))  # 정사각형 이미지로 저장
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
+    S = librosa.feature.melspectrogram(y=audio_segment, sr=sr, n_mels=128)
     S_dB = librosa.power_to_db(S, ref=np.max)
     librosa.display.specshow(S_dB, sr=sr, x_axis='time', y_axis='mel')
     plt.axis('off')
@@ -19,7 +31,7 @@ def save_spectrogram(audio_path, save_path):
     plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
     plt.close()
 
-# 2. 데이터셋 폴더 순회하며 스펙트로그램 생성
+# 3. 데이터셋 폴더 순회하며 오디오 파일을 10초 단위로 나눈 후 스펙트로그램 생성
 def generate_spectrograms(base_dir, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -32,10 +44,13 @@ def generate_spectrograms(base_dir, output_dir):
         for file in os.listdir(label_dir):
             if file.endswith('.mp3'):
                 input_path = os.path.join(label_dir, file)
-                output_path = os.path.join(output_label_dir, file.replace('.mp3', '.png'))
-                save_spectrogram(input_path, output_path)
+                segments, sr = trim_audio(input_path)
+                
+                for i, segment in enumerate(segments):
+                    output_path = os.path.join(output_label_dir, f"{file.replace('.mp3', '')}_{i}.png")
+                    save_spectrogram(segment, sr, output_path)
 
-# 3. 스펙트로그램 이미지 로드 및 레이블링
+# 4. 스펙트로그램 이미지 로드 및 레이블링
 def load_dataset(image_dir):
     images = []
     labels = []
@@ -53,7 +68,7 @@ def load_dataset(image_dir):
 
     return np.array(images), np.array(labels), label_map
 
-# 4. CNN 모델 정의
+# 5. CNN 모델 정의
 def build_cnn_model(input_shape, num_classes):
     model = models.Sequential([
         layers.Conv2D(32, (3, 3), activation='relu', input_shape=input_shape),
@@ -73,10 +88,10 @@ if __name__ == "__main__":
     base_dir = 'data'
     spectrogram_dir = 'spectrograms'
 
-    # gpu 인식 여부 확인
+    # GPU 인식 여부 확인
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
 
-    # 1. MP3 → 스펙트로그램 PNG 생성
+    # 1. MP3 → 10초 단위 트리밍 → 스펙트로그램 PNG 생성
     generate_spectrograms(base_dir, spectrogram_dir)
 
     # 2. 스펙트로그램 이미지 데이터 로드
@@ -93,4 +108,3 @@ if __name__ == "__main__":
 
     # 5. 학습 결과 저장 (옵션)
     model.save('bee_vs_hornet_cnn.h5')
-
