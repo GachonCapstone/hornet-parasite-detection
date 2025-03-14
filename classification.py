@@ -7,10 +7,10 @@ import tensorflow as tf
 from tensorflow.keras import layers, models
 from sklearn.model_selection import train_test_split
 
-# 1. 오디오 파일을 10초 단위로 자르는 함수
-def trim_audio(audio_path, sr=22050, duration=10):
+# 1. 오디오 파일을 3초 단위로 자르는 함수
+def trim_audio(audio_path, sr=22050, duration=3):
     y, _ = librosa.load(audio_path, sr=sr)
-    segment_length = sr * duration  # 10초 길이 샘플 수
+    segment_length = sr * duration  # 3초 길이 샘플 수
     segments = []
     
     for start in range(0, len(y), segment_length):

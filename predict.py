@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import librosa
 import librosa.display
@@ -6,10 +7,10 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
 
-# 오디오 파일을 10초 단위로 자르는 함수
-def trim_audio(audio_path, sr=22050, duration=10):
+# 오디오 파일을 3초 단위로 자르는 함수
+def trim_audio(audio_path, sr=22050, duration=3):
     y, _ = librosa.load(audio_path, sr=sr)
-    segment_length = sr * duration  # 10초 길이 샘플 수
+    segment_length = sr * duration  # 3초 길이 샘플 수
     segments = []
     
     for start in range(0, len(y), segment_length):
@@ -45,9 +46,16 @@ label_map = {0: 'honeybee', 1: 'hornet'}
 # 테스트 데이터 경로
 test_data_dir = 'test_data'
 temp_spectrogram_dir = 'temp_spectrograms'
+result_dir = 'result'
 
 # 임시 스펙트로그램 저장 폴더
 os.makedirs(temp_spectrogram_dir, exist_ok=True)
+
+# 결과 저장 폴더 생성
+os.makedirs(result_dir, exist_ok=True)
+
+# 예측 결과 저장을 위한 리스트
+results = []
 
 # 테스트 데이터 순회하며 예측
 for label in ['honeybee', 'hornet']:
@@ -73,5 +81,22 @@ for label in ['honeybee', 'hornet']:
             prediction = model.predict(input_data)
             predicted_class = np.argmax(prediction)
             predicted_label = label_map[predicted_class]
+            confidence = prediction[0][predicted_class]
 
-            print(f'{file_name} (Segment {i}): 실제={label}, 예측={predicted_label}, 확률={prediction[0][predicted_class]:.2f}')
+            result_entry = {
+                'file_name': file_name,
+                'segment': i,
+                'actual_label': label,
+                'predicted_label': predicted_label,
+                'confidence': float(confidence)
+            }
+            results.append(result_entry)
+            
+            print(f'{file_name} (Segment {i}): 실제={label}, 예측={predicted_label}, 확률={confidence:.2f}')
+
+# JSON 결과 저장
+result_json_path = os.path.join(result_dir, 'prediction_results.json')
+with open(result_json_path, 'w', encoding='utf-8') as json_file:
+    json.dump(results, json_file, indent=4, ensure_ascii=False)
+
+print(f'예측 결과가 {result_json_path}에 저장되었습니다.')
