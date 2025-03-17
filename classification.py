@@ -31,7 +31,7 @@ def save_spectrogram(audio_segment, sr, save_path):
     plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
     plt.close()
 
-# 3. 데이터셋 폴더 순회하며 오디오 파일을 10초 단위로 나눈 후 스펙트로그램 생성
+# 3. 데이터셋 폴더 순회하며 오디오 파일을 3초 단위로 나눈 후 스펙트로그램 생성
 def generate_spectrograms(base_dir, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     # GPU 인식 여부 확인
     print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
 
-    # 1. MP3 → 10초 단위 트리밍 → 스펙트로그램 PNG 생성
+    # 1. MP3 → 3초 단위 트리밍 → 스펙트로그램 PNG 생성
     generate_spectrograms(base_dir, spectrogram_dir)
 
     # 2. 스펙트로그램 이미지 데이터 로드
