@@ -3,14 +3,22 @@
         "file_name": "honeybee1.mp3",
         "segment": 0,
         "actual_label": "honeybee",
-        "predicted_label": "hornet",
-        "confidence": 1.0
+        "predicted_label": "honeybee",
+        "confidence": 0.8959615230560303,
+        "raw_probabilities": [
+            0.8959615230560303,
+            0.10403846204280853
+        ]
     },
     {
         "file_name": "hornet1.mp3",
         "segment": 0,
         "actual_label": "hornet",
         "predicted_label": "hornet",
-        "confidence": 1.0
+        "confidence": 0.8228514194488525,
+        "raw_probabilities": [
+            0.17714861035346985,
+            0.8228514194488525
+        ]
     }
 ]

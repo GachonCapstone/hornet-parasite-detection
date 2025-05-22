@@ -62,14 +62,17 @@ for label in ['honeybee', 'hornet']:
     label_dir = os.path.join(test_data_dir, label)
 
     for file_name in os.listdir(label_dir):
-        if not file_name.endswith('.mp3'):
+        if not file_name.lower().endswith('.mp3'):
             continue
 
         mp3_path = os.path.join(label_dir, file_name)
         segments, sr = trim_audio(mp3_path)
         
         for i, segment in enumerate(segments):
-            spectrogram_path = os.path.join(temp_spectrogram_dir, f'{label}_{file_name.replace(".mp3", f"_{i}.png")}')
+            spectrogram_path = os.path.join(
+                temp_spectrogram_dir,
+                f'{label}_{file_name.replace(".mp3", f"_{i}.png")}'
+            )
             
             # MP3 → 스펙트로그램 변환
             save_spectrogram(segment, sr, spectrogram_path)
@@ -78,22 +81,31 @@ for label in ['honeybee', 'hornet']:
             input_data = load_spectrogram_as_input(spectrogram_path)
 
             # 예측
-            prediction = model.predict(input_data)
-            predicted_class = np.argmax(prediction)
+            prediction = model.predict(input_data)  # shape (1, 2)
+            pred_probs = prediction[0]
+            predicted_class = np.argmax(pred_probs)
             predicted_label = label_map[predicted_class]
-            confidence = prediction[0][predicted_class]
+            confidence = pred_probs[predicted_class]
+
+            # 소수점 10자리까지 보기
+            print(
+                f'{file_name} (Segment {i}): '
+                f'실제={label}, 예측={predicted_label}, '
+                f'확률={confidence:.10f}'
+            )
+            # raw 확률 분포도 출력
+            print(f'  Raw probabilities: [{pred_probs[0]:.10f}, {pred_probs[1]:.10f}]')
 
             result_entry = {
                 'file_name': file_name,
                 'segment': i,
                 'actual_label': label,
                 'predicted_label': predicted_label,
-                'confidence': float(confidence)
+                'confidence': float(confidence),
+                'raw_probabilities': [float(pred_probs[0]), float(pred_probs[1])]
             }
             results.append(result_entry)
             
-            print(f'{file_name} (Segment {i}): 실제={label}, 예측={predicted_label}, 확률={confidence:.2f}')
-
 # JSON 결과 저장
 result_json_path = os.path.join(result_dir, 'prediction_results.json')
 with open(result_json_path, 'w', encoding='utf-8') as json_file:
