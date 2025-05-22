@@ -38,7 +38,7 @@ def load_spectrogram_as_input(image_path):
     return np.expand_dims(img_array, axis=0)
 
 # 모델 로드
-model = load_model('bee_vs_hornet_cnn.h5')
+model = load_model('bee_hornet_cnn.h5')
 
 # 레이블 매핑
 label_map = {0: 'honeybee', 1: 'hornet'}

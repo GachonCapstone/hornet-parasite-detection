@@ -1,0 +1,7 @@
+.venv/
+/data/honeybee/*.mp3
+/data/honeybee/*.wav
+/data/hornet/*.mp3
+/data/hornet/*.wav
+/spectrograms/honeybee/*.png
+/spectrograms/hornet/*.png
