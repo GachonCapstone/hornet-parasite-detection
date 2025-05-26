@@ -1,114 +1,74 @@
-import os
-import json
+import io
 import numpy as np
 import librosa
-import librosa.display
-import matplotlib.pyplot as plt
+import tensorflow as tf
 from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
 
-# 오디오 파일을 3초 단위로 자르는 함수
-def trim_audio(audio_path, sr=22050, duration=3):
-    y, _ = librosa.load(audio_path, sr=sr)
-    segment_length = sr * duration  # 3초 길이 샘플 수
-    segments = []
-    
-    for start in range(0, len(y), segment_length):
-        segment = y[start:start + segment_length]
-        if len(segment) == segment_length:
-            segments.append(segment)
-    
-    return segments, sr
+def predict_audio_bytes(
+    audio_bytes: bytes,
+    model_path: str,
+    duration: int = 3,
+    sr: int = 22050
+) -> list[dict]:
+    """
+    바이트 스트림으로 전달된 오디오 데이터를 지정된 duration(초) 단위로 분할하여
+    모델로 추론한 결과를 JSON-serializable 리스트 형태로 반환
 
-# 스펙트로그램 저장 함수
-def save_spectrogram(audio_segment, sr, save_path):
-    plt.figure(figsize=(4, 4))
-    S = librosa.feature.melspectrogram(y=audio_segment, sr=sr, n_mels=128)
-    S_dB = librosa.power_to_db(S, ref=np.max)
-    librosa.display.specshow(S_dB, sr=sr, x_axis='time', y_axis='mel')
-    plt.axis('off')
-    plt.tight_layout(pad=0)
-    plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
-    plt.close()
+    Parameters:
+    - audio_bytes: 오디오 파일의 바이트 스트림 (e.g., .mp3, .wav 데이터)
+    - model_path: 학습된 Keras 모델 파일 경로 (.h5)
+    - duration: 분할 단위 길이(초)
+    - sr: 샘플링 레이트
 
-# 스펙트로그램 이미지 → 모델 입력용 배열 변환
-def load_spectrogram_as_input(image_path):
-    img = image.load_img(image_path, target_size=(128, 128))
-    img_array = image.img_to_array(img) / 255.0
-    return np.expand_dims(img_array, axis=0)
+    Returns:
+    - results: [
+          {
+            'segment_index': int,
+            'predicted_label': str,
+            'confidence': float,
+            'raw_probabilities': [float,...]
+          },
+          ...
+      ]
+    """
+    # 1) 오디오 데이터를 바이트 스트림에서 로드
+    y, _ = librosa.load(io.BytesIO(audio_bytes), sr=sr)
 
-# 모델 로드
-model = load_model('bee_hornet_cnn.h5')
+    # 2) 모델 로드
+    model = load_model(model_path)
+    label_map = {0: 'honeybee', 1: 'hornet'}
 
-# 레이블 매핑
-label_map = {0: 'honeybee', 1: 'hornet'}
+    # 3) 오디오 분할
+    segment_length = sr * duration
+    segments = [
+        y[i:i+segment_length]
+        for i in range(0, len(y), segment_length)
+        if len(y[i:i+segment_length]) == segment_length
+    ]
 
-# 테스트 데이터 경로
-test_data_dir = 'test_data'
-temp_spectrogram_dir = 'temp_spectrograms'
-result_dir = 'result'
+    results = []
+    # 4) 각 세그먼트 스펙트로그램 생성 및 예측
+    for idx, segment in enumerate(segments):
+        # Mel-spectrogram 계산
+        S = librosa.feature.melspectrogram(y=segment, sr=sr, n_mels=128)
+        S_db = librosa.power_to_db(S, ref=np.max)
+        # 0~1 정규화
+        S_norm = (S_db - S_db.min()) / (S_db.max() - S_db.min() + 1e-6)
 
-# 임시 스펙트로그램 저장 폴더
-os.makedirs(temp_spectrogram_dir, exist_ok=True)
+        # 채널 및 배치 차원 추가
+        img = S_norm[..., np.newaxis]  # (128, T, 1)
+        img_resized = tf.image.resize(img, [128, 128]).numpy()  # (128,128,1)
+        img_3ch = np.repeat(img_resized, 3, axis=-1)  # (128,128,3)
+        input_batch = np.expand_dims(img_3ch, axis=0)  # (1,128,128,3)
 
-# 결과 저장 폴더 생성
-os.makedirs(result_dir, exist_ok=True)
+        # 예측 실행
+        preds = model.predict(input_batch, verbose=0)[0]
+        cls = int(np.argmax(preds))
+        results.append({
+            'segment_index': idx,
+            'predicted_label': label_map.get(cls, str(cls)),
+            'confidence': float(preds[cls]),
+            'raw_probabilities': [float(p) for p in preds]
+        })
 
-# 예측 결과 저장을 위한 리스트
-results = []
-
-# 테스트 데이터 순회하며 예측
-for label in ['honeybee', 'hornet']:
-    label_dir = os.path.join(test_data_dir, label)
-
-    for file_name in os.listdir(label_dir):
-        if not file_name.lower().endswith('.mp3'):
-            continue
-
-        mp3_path = os.path.join(label_dir, file_name)
-        segments, sr = trim_audio(mp3_path)
-        
-        for i, segment in enumerate(segments):
-            spectrogram_path = os.path.join(
-                temp_spectrogram_dir,
-                f'{label}_{file_name.replace(".mp3", f"_{i}.png")}'
-            )
-            
-            # MP3 → 스펙트로그램 변환
-            save_spectrogram(segment, sr, spectrogram_path)
-
-            # 스펙트로그램 → 모델 입력 데이터
-            input_data = load_spectrogram_as_input(spectrogram_path)
-
-            # 예측
-            prediction = model.predict(input_data)  # shape (1, 2)
-            pred_probs = prediction[0]
-            predicted_class = np.argmax(pred_probs)
-            predicted_label = label_map[predicted_class]
-            confidence = pred_probs[predicted_class]
-
-            # 소수점 10자리까지 보기
-            print(
-                f'{file_name} (Segment {i}): '
-                f'실제={label}, 예측={predicted_label}, '
-                f'확률={confidence:.10f}'
-            )
-            # raw 확률 분포도 출력
-            print(f'  Raw probabilities: [{pred_probs[0]:.10f}, {pred_probs[1]:.10f}]')
-
-            result_entry = {
-                'file_name': file_name,
-                'segment': i,
-                'actual_label': label,
-                'predicted_label': predicted_label,
-                'confidence': float(confidence),
-                'raw_probabilities': [float(pred_probs[0]), float(pred_probs[1])]
-            }
-            results.append(result_entry)
-            
-# JSON 결과 저장
-result_json_path = os.path.join(result_dir, 'prediction_results.json')
-with open(result_json_path, 'w', encoding='utf-8') as json_file:
-    json.dump(results, json_file, indent=4, ensure_ascii=False)
-
-print(f'예측 결과가 {result_json_path}에 저장되었습니다.')
+    return results

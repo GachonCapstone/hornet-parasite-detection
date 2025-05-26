@@ -1,1 +1,1 @@
-# Bee Classification Model using buzz sound, spectogram and CNN
+# Bee Classification Model using buzz sound, spectrogram and CNN
