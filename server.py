@@ -3,9 +3,12 @@ import base64
 import threading
 import time
 import queue
+
 import paho.mqtt.client as mqtt
 import requests
-from predict import predict_audio_bytes
+
+from audio_detection import predict_audio_bytes
+from image_detection import infer_image 
 
 # 요청 대기 큐
 inference_queue = queue.Queue()
@@ -22,25 +25,37 @@ def inference_worker():
         topic, payload = inference_queue.get()
         try:
             data = json.loads(payload.decode('utf-8'))
+            
             audio_b64 = data.get('audio')
-            if not audio_b64:
+            image_b64 = data.get('image')
+
+            if not audio_b64 or not image_b64:
                 print("[Worker] Error: 'audio' 키 없음")
-                continue
+            else:
+                audio_bytes = base64.b64decode(audio_b64)
+                audio_results = predict_audio_bytes(
+                    audio_bytes=audio_bytes,
+                    model_path='audio_detection_model.h5'
+                )
+                print(f"[Worker] Audio prediction done: {audio_results}")
 
-            audio_bytes = base64.b64decode(audio_b64)
-            results = predict_audio_bytes(
-                audio_bytes=audio_bytes,
-                model_path='bee_hornet_cnn.h5'
-            )
-            print(f"[Worker] Prediction done: {results}")
+                image_bytes = base64.b64decode(image_b64)
+                image_results = infer_image(
+                    image_bytes=image_bytes,
+                    conf_threshold=0.5
+                )
+                print(f"[Worker] Image prediction done: {image_results}")
 
-            # 웹 서버로 결과 전송
-            response = requests.post(
-                'http://localhost:8080/detect/hornet',
-                json={'predictions': results},
-                timeout=10.0
-            )
-            print(f"[Worker] POST responded {response.status_code}")
+                # 결과 POST
+                resp = requests.post(
+                    'http://localhost:8080/detect/hornet',
+                    json={'audio_predictions': audio_results, 'image_predictions':image_results},
+                    timeout=10.0
+                )
+                print(f"[Worker] POST responded {resp.status_code}")
+            
+            
+
         except Exception as e:
             print(f"[Worker] Error: {e}")
         finally:
