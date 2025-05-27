@@ -18,48 +18,65 @@ def on_message(client, userdata, msg):
     print(f"[Receive] Topic: {msg.topic}")
     inference_queue.put((msg.topic, msg.payload))
 
-# 추론 워커 (스레드)
+def late_fusion(audio_results, image_results,
+                w_audio: float = 0.4, w_image: float = 0.6) -> str:
+
+    # 1) 최상위 하나만 꺼내오기
+    a = audio_results[0]
+    i = image_results[0]
+
+    # 2) score 계산 (audio: a['prob'], image: i['confidence'])
+    a_score = a.get('confidence', 0.0) * w_audio
+    i_score = i.get('confidence', 0.0) * w_image
+
+    # 3) 더 큰 쪽의 label 반환
+    return a['predicted_label'] if a_score > i_score else i['predicted_label']
+
+
 def inference_worker():
     print("[Worker] Inference worker started.")
     while True:
         topic, payload = inference_queue.get()
         try:
             data = json.loads(payload.decode('utf-8'))
-            
             audio_b64 = data.get('audio')
             image_b64 = data.get('image')
 
             if not audio_b64 or not image_b64:
-                print("[Worker] Error: 'audio' 키 없음")
+                print("[Worker] Error: 'audio' or 'image' key missing")
             else:
+                # 1) 디코딩 & 추론
                 audio_bytes = base64.b64decode(audio_b64)
                 audio_results = predict_audio_bytes(
                     audio_bytes=audio_bytes,
                     model_path='audio_detection_model.h5'
                 )
-                print(f"[Worker] Audio prediction done: {audio_results}")
+                print(f"[Worker] Audio probs: {audio_results}")
 
                 image_bytes = base64.b64decode(image_b64)
                 image_results = infer_image(
                     image_bytes=image_bytes,
                     conf_threshold=0.5
                 )
-                print(f"[Worker] Image prediction done: {image_results}")
+                print(f"[Worker] Image probs: {image_results}")
 
-                # 결과 POST
+                # 2) late fusion으로 최종 클래스 결정
+                final_label = late_fusion(audio_results, image_results)
+                print(f"[Worker] Fused final label: {final_label}")
+
+                # 3) 최종 레이블만 POST
                 resp = requests.post(
                     'http://localhost:8080/detect/hornet',
-                    json={'audio_predictions': audio_results, 'image_predictions':image_results},
+                    json={'label': final_label},
                     timeout=10.0
                 )
                 print(f"[Worker] POST responded {resp.status_code}")
-            
-            
 
         except Exception as e:
             print(f"[Worker] Error: {e}")
         finally:
             inference_queue.task_done()
+
 
 # 주기적 메시지 발행 스레드
 def scheduled_publisher(client):
