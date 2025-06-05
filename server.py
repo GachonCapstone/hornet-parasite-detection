@@ -8,7 +8,8 @@ import paho.mqtt.client as mqtt
 import requests
 
 from audio_detection import predict_audio_bytes
-from image_detection import infer_image 
+from image_detection import infer_image
+from datetime import datetime
 
 # 요청 대기 큐
 inference_queue = queue.Queue()
@@ -67,7 +68,7 @@ def inference_worker():
                 # 3) 최종 레이블만 POST
                 resp = requests.post(
                     'http://localhost:8080/detect/hornet',
-                    json={'label': final_label, 'count': image_results[0].get('count')},
+                    json={'label': final_label, 'count': image_results[0].get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
                     timeout=10.0
                 )
                 print(f"[Worker] POST responded {resp.status_code}")
