@@ -3,7 +3,6 @@ import numpy as np
 from ultralytics import YOLO
 
 # YOLO 모델 로드
-# "말벌.pt" 대신 실제 모델 파일 경로를 지정하세요.
 yolo_model = YOLO("image_detection_model.pt")
 
 
@@ -30,6 +29,10 @@ def infer_image(image_bytes: bytes,
           }
         ]
     """
+
+    hornet_count = 0 # 말벌 개체 수
+    hornet_prob_sum = 0.0 # 확률 누적 총합
+
     # 바이트 스트림을 OpenCV 이미지로 디코딩
     nparr = np.frombuffer(image_bytes, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -44,7 +47,11 @@ def infer_image(image_bytes: bytes,
             conf = float(box.conf.cpu().numpy())
             cls = int(box.cls.cpu().numpy())
             if conf >= conf_threshold and cls in hornet_classes:
-                hornet_prob = max(hornet_prob, conf)
+                hornet_prob_sum += conf
+                hornet_count += 1
+
+    # 평균 확률 계산
+    hornet_prob = hornet_prob_sum / hornet_count if hornet_count > 0 else 0.0
 
     # 꿀벌 확률
     honeybee_prob = 1.0 - hornet_prob
@@ -61,5 +68,6 @@ def infer_image(image_bytes: bytes,
         'segment_index': 0,
         'predicted_label': predicted_label,
         'confidence': confidence,
-        'raw_probabilities': raw_probs
+        'raw_probabilities': raw_probs,
+        'count': hornet_count
     }]

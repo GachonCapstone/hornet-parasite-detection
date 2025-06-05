@@ -67,7 +67,7 @@ def inference_worker():
                 # 3) 최종 레이블만 POST
                 resp = requests.post(
                     'http://localhost:8080/detect/hornet',
-                    json={'label': final_label},
+                    json={'label': final_label, 'count': image_results[0].get('count')},
                     timeout=10.0
                 )
                 print(f"[Worker] POST responded {resp.status_code}")
