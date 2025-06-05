@@ -7,8 +7,9 @@ import queue
 import paho.mqtt.client as mqtt
 import requests
 
-from audio_detection import predict_audio_bytes
-from image_detection import infer_image
+from hornet_audio_detection import predict_audio_bytes
+from hornet_image_detection import infer_image
+from parasite_image_detection import parasite_detection
 from datetime import datetime
 
 # 요청 대기 큐
@@ -48,10 +49,7 @@ def inference_worker():
             else:
                 # 1) 디코딩 & 추론
                 audio_bytes = base64.b64decode(audio_b64)
-                audio_results = predict_audio_bytes(
-                    audio_bytes=audio_bytes,
-                    model_path='audio_detection_model.h5'
-                )
+                audio_results = predict_audio_bytes(audio_bytes=audio_bytes)
                 print(f"[Worker] Audio probs: {audio_results}")
 
                 image_bytes = base64.b64decode(image_b64)
@@ -61,6 +59,9 @@ def inference_worker():
                 )
                 print(f"[Worker] Image probs: {image_results}")
 
+                parasite_image_results = parasite_detection(image_bytes)
+                print(f"[Worker] Parasite Image probs: {parasite_image_results}")
+
                 # 2) late fusion으로 최종 클래스 결정
                 final_label = late_fusion(audio_results, image_results)
                 print(f"[Worker] Fused final label: {final_label}")
@@ -68,7 +69,7 @@ def inference_worker():
                 # 3) 최종 레이블만 POST
                 resp = requests.post(
                     'http://localhost:8080/detect/hornet',
-                    json={'label': final_label, 'count': image_results[0].get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
+                    json={'label': final_label, 'hornet_count': image_results[0].get('count'), 'parasite_count': parasite_image_results.get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
                     timeout=10.0
                 )
                 print(f"[Worker] POST responded {resp.status_code}")
