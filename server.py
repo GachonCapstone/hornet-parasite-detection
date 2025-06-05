@@ -68,7 +68,7 @@ def inference_worker():
 
                 # 3) 최종 레이블만 POST
                 resp = requests.post(
-                    'http://localhost:8080/detect/hornet',
+                    'http://localhost:8080/sensing/threat',
                     json={'label': final_label, 'hornet_count': image_results[0].get('count'), 'parasite_count': parasite_image_results.get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
                     timeout=10.0
                 )
