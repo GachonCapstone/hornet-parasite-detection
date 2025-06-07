@@ -3,6 +3,8 @@ import json
 import base64
 import paho.mqtt.client as mqtt
 
+
+HIVE_ID = 1
 BROKER_HOST = 'localhost'
 BROKER_PORT = 1883
 REQUEST_TOPIC = 'pi/request'
@@ -45,6 +47,7 @@ def send_all_pairs(client: mqtt.Client):
             continue
 
         payload = {
+            'id': HIVE_ID,
             'audio': encode_file_to_b64(audio_path),
             'image': encode_file_to_b64(image_path),
         }

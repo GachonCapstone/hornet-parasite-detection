@@ -41,6 +41,7 @@ def inference_worker():
         topic, payload = inference_queue.get()
         try:
             data = json.loads(payload.decode('utf-8'))
+            hive_id = data.get('id')
             audio_b64 = data.get('audio')
             image_b64 = data.get('image')
 
@@ -69,7 +70,7 @@ def inference_worker():
                 # 3) 최종 레이블만 POST
                 resp = requests.post(
                     'http://localhost:8080/sensing/threat',
-                    json={'label': final_label, 'hornet_count': image_results[0].get('count'), 'parasite_count': parasite_image_results.get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
+                    json={'id': hive_id, 'label': final_label, 'hornet_count': image_results[0].get('count'), 'parasite_count': parasite_image_results.get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
                     timeout=10.0
                 )
                 print(f"[Worker] POST responded {resp.status_code}")

@@ -35,7 +35,7 @@ def parasite_detection(image_bytes: bytes) -> dict:
 
         return {
             "count": len(confs),
-            "score": round(max(confs), 3) if confs else 0.0
+            "score": round(sum(confs) / len(confs), 3) if confs else 0.0
         }
 
     except Exception:
