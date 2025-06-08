@@ -1,1 +1,1 @@
-# Bee Classification Model using buzz sound, spectrogram and CNN
+# Hornet And Parasite Detection From Video And Sound
