@@ -92,43 +92,41 @@ def video_playback_loop():
     client.subscribe(REQUEST_TOPIC, qos=1)
     client.loop_start()
 
-    # test_video 내 모든 mp4 파일 순회
-    for video_path in sorted(glob.glob(os.path.join(VIDEO_DIR, '*.mp4'))):
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            print(f"⛔️ 영상 열기 실패: {video_path}")
-            continue
+    # 무한 루프: 모든 비디오를 다 본 뒤 다시 처음으로
+    while True:
+        for video_path in sorted(glob.glob(os.path.join(VIDEO_DIR, '*.mp4'))):
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                print(f"⛔️ 영상 열기 실패: {video_path}")
+                continue
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        current_fps = fps
-        frame_time = 1.0 / fps
-        print(f"▶ 재생 시작: {os.path.basename(video_path)} ({fps:.1f} FPS)")
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            current_fps = fps
+            frame_time = 1.0 / fps
+            print(f"▶ 재생 시작: {os.path.basename(video_path)} ({fps:.1f} FPS)")
 
-        start_ts = time.time()
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+            start_ts = time.time()
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-            # 전역 상태 업데이트
-            elapsed = time.time() - start_ts
-            with state_lock:
-                current_frame = frame
-                current_video = video_path
-                current_time = elapsed
+                # 전역 상태 업데이트
+                elapsed = time.time() - start_ts
+                with state_lock:
+                    current_frame = frame
+                    current_video = video_path
+                    current_time = elapsed
 
-            # 화면에 출력
-            cv2.imshow('Video Playback', frame)
-            if cv2.waitKey(int(frame_time * 1000)) & 0xFF == ord('q'):
-                cap.release()
-                cv2.destroyAllWindows()
-                client.loop_stop()
-                return
+                # 화면에 출력
+                cv2.imshow('Video Playback', frame)
+                if cv2.waitKey(int(frame_time * 1000)) & 0xFF == ord('q'):
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    client.loop_stop()
+                    return
 
-        cap.release()
-
-    cv2.destroyAllWindows()
-    client.loop_stop()
+            cap.release()
 
 if __name__ == '__main__':
     video_playback_loop()

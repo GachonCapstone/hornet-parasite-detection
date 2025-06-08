@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+import os
 
 # YOLO 모델 로드
 # 모델 경로 설정

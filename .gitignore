@@ -1,5 +1,6 @@
 .venv/
+/hpdenv/
 /spectrograms/honeybee/*.png
 /spectrograms/hornet/*.png
-*.Ds_Store
+*.Ds_Stores
 *.pyc

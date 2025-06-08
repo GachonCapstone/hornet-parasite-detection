@@ -69,7 +69,7 @@ def inference_worker():
 
                 # 3) 최종 레이블만 POST
                 resp = requests.post(
-                    'http://localhost:8080/sensing/threat',
+                    'http://192.168.35.217:8080/sensing/threat',
                     json={'id': hive_id, 'label': final_label, 'hornet_count': image_results[0].get('count'), 'parasite_count': parasite_image_results.get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
                     timeout=10.0
                 )
@@ -88,7 +88,7 @@ def scheduled_publisher(client):
         message = b'Scheduled request'
         client.publish(topic, message)
         print(f"[Publish] {topic}")
-        time.sleep(60)
+        time.sleep(5)
 
 # 메인 함수
 def main():
