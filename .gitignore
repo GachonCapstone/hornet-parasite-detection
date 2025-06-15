@@ -1,4 +1,4 @@
-.venv/
+/venv/
 /hpdenv/
 /spectrograms/honeybee/*.png
 /spectrograms/hornet/*.png

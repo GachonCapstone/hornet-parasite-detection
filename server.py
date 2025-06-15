@@ -4,6 +4,8 @@ import threading
 import time
 import queue
 
+import cv2
+import numpy as np
 import paho.mqtt.client as mqtt
 import requests
 
@@ -20,18 +22,15 @@ def on_message(client, userdata, msg):
     print(f"[Receive] Topic: {msg.topic}")
     inference_queue.put((msg.topic, msg.payload))
 
+# late fusion 함수 unchanged
 def late_fusion(audio_results, image_results,
                 w_audio: float = 0.4, w_image: float = 0.6) -> str:
-
-    # 1) 최상위 하나만 꺼내오기
     a = audio_results[0]
     i = image_results[0]
 
-    # 2) score 계산 (audio: a['prob'], image: i['confidence'])
     a_score = a.get('confidence', 0.0) * w_audio
     i_score = i.get('confidence', 0.0) * w_image
 
-    # 3) 더 큰 쪽의 label 반환
     return a['predicted_label'] if a_score > i_score else i['predicted_label']
 
 
@@ -63,14 +62,52 @@ def inference_worker():
                 parasite_image_results = parasite_detection(image_bytes)
                 print(f"[Worker] Parasite Image probs: {parasite_image_results}")
 
-                # 2) late fusion으로 최종 클래스 결정
+                # 2) 이미지 디코딩
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                # 박스 및 라벨 렌더링
+                for det in image_results:
+                    bbox = det.get('bbox')  # [xmin, ymin, xmax, ymax]
+                    label = det.get('label', '')
+                    score = det.get('confidence', 0)
+                    if bbox:
+                        x1, y1, x2, y2 = map(int, bbox)
+                        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        text = f"{label}:{score:.2f}"
+                        cv2.putText(img, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.5, (0, 255, 0), 1)
+
+                # 호넷 개수 표시
+                hornet_count = sum(det.get('count', 0) for det in image_results)
+                cv2.putText(img, f"Hornets: {hornet_count}", (10, img.shape[0] - 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+                # Parasite 개수 표시
+                if parasite_image_results:
+                    p_count = parasite_image_results.get('count', 0)
+                    cv2.putText(img, f"Parasites: {p_count}", (10, img.shape[0] - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+                # 3) 윈도우에 표시
+                window_name = f"Hive {hive_id} Inference"
+                cv2.imshow(window_name, img)
+                cv2.waitKey(1)
+
+                # 4) late fusion으로 최종 클래스 결정
                 final_label = late_fusion(audio_results, image_results)
                 print(f"[Worker] Fused final label: {final_label}")
 
-                # 3) 최종 레이블만 POST
+                # 5) 최종 레이블만 POST
                 resp = requests.post(
-                    'http://192.168.35.217:8080/sensing/threat',
-                    json={'id': hive_id, 'label': final_label, 'hornet_count': image_results[0].get('count'), 'parasite_count': parasite_image_results.get('count'), 'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')},
+                    'http://192.168.35.79:8080/sensing/threat',
+                    json={
+                        'id': hive_id,
+                        'label': final_label,
+                        'hornet_count': hornet_count,
+                        'parasite_count': parasite_image_results.get('count', 0),
+                        'measuredAt': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+                    },
                     timeout=10.0
                 )
                 print(f"[Worker] POST responded {resp.status_code}")
@@ -95,19 +132,12 @@ def main():
     client = mqtt.Client()
     client.on_message = on_message
 
-    # 브로커 연결
     client.connect('localhost', 1883, 60)
-
-    # 구독 설정
     client.subscribe('pi/response', qos=1)
 
-    # 추론 워커 스레드 시작
     threading.Thread(target=inference_worker, daemon=True).start()
-
-    # 발행 스레드 시작
     threading.Thread(target=scheduled_publisher, args=(client,), daemon=True).start()
 
-    # 루프 시작
     client.loop_forever()
 
 if __name__ == '__main__':

@@ -85,7 +85,7 @@ def video_playback_loop():
 
     try:
         while not stop_event.is_set():
-            for video_path in sorted(glob.glob(os.path.join(VIDEO_DIR, '*.mp4'))):
+            for video_path in sorted(glob.glob(os.path.join(VIDEO_DIR, 'bee_parasite_sample_video.mp4'))):
                 if stop_event.is_set():
                     break
 
